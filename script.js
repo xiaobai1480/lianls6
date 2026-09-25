@@ -6,6 +6,8 @@ const bgm = document.getElementById("bgm");
 const toast = document.getElementById("toast");
 const eggOverlay = document.getElementById("eggOverlay");
 const eggVideo = document.getElementById("eggVideo");
+const eggStart = document.getElementById("eggStart");
+const eggOrientationHint = document.getElementById("eggOrientationHint");
 const themeButtons = document.querySelectorAll(".theme-btn");
 
 const applyTheme = (theme) => {
@@ -67,7 +69,7 @@ for (let index = 0; index < 88; index += 1) {
 
 let easterEggTimer = null;
 
-const playEasterEgg = async () => {
+const showEasterEgg = () => {
   if (!eggOverlay || !eggVideo) return;
 
   if (bgm) {
@@ -76,42 +78,87 @@ const playEasterEgg = async () => {
     bgm.muted = true;
   }
 
-  eggOverlay.classList.remove("is-visible");
+  eggOverlay.classList.remove("is-playing");
   eggVideo.muted = false;
+  eggVideo.pause();
   eggVideo.currentTime = 0;
+  eggOverlay.classList.add("is-visible");
+};
 
-  requestAnimationFrame(() => {
-    eggOverlay.classList.add("is-visible");
-  });
-
+const playEasterEgg = async () => {
+  if (!eggOverlay || !eggVideo) return;
   const fullScreenApi =
-    eggVideo.requestFullscreen ||
-    eggVideo.webkitRequestFullscreen ||
-    eggVideo.mozRequestFullScreen ||
-    eggVideo.msRequestFullscreen;
+    eggOverlay.requestFullscreen ||
+    eggOverlay.webkitRequestFullscreen ||
+    eggOverlay.mozRequestFullScreen ||
+    eggOverlay.msRequestFullscreen;
 
+  let fullscreenRequest;
   if (typeof fullScreenApi === "function") {
     try {
-      await fullScreenApi.call(eggVideo);
+      fullscreenRequest = Promise.resolve(fullScreenApi.call(eggOverlay));
+    } catch (error) {
+      console.warn("Fullscreen request failed:", error);
+    }
+  } else if (typeof eggVideo.webkitEnterFullscreen === "function") {
+    try {
+      eggVideo.webkitEnterFullscreen();
+    } catch (error) {
+      console.warn("Native video fullscreen request failed:", error);
+    }
+  }
+
+  let playbackRequest;
+  try {
+    playbackRequest = eggVideo.play();
+  } catch (error) {
+    console.warn("Easter egg playback failed:", error);
+  }
+
+  if (fullscreenRequest) {
+    try {
+      await fullscreenRequest;
     } catch (error) {
       console.warn("Fullscreen request failed:", error);
     }
   }
 
+  let orientationRequest;
   if (window.screen.orientation?.lock) {
     try {
-      await window.screen.orientation.lock("landscape");
+      orientationRequest = Promise.resolve(window.screen.orientation.lock("landscape"));
     } catch (error) {
-      console.warn("Landscape orientation lock failed; using the rotated video layout:", error);
+      console.warn("Landscape orientation lock failed:", error);
     }
+  } else {
+    console.warn("Landscape orientation lock is not supported by this browser.");
   }
 
-  try {
-    await eggVideo.play();
-  } catch (error) {
-    console.warn("Easter egg autoplay was blocked:", error);
+  eggOverlay.classList.add("is-playing");
+  if (orientationRequest) {
+    try {
+      await orientationRequest;
+    } catch (error) {
+      console.warn("Landscape orientation lock failed:", error);
+    }
+  }
+  if (playbackRequest) {
+    try {
+      await playbackRequest;
+    } catch (error) {
+      console.warn("Easter egg autoplay was blocked:", error);
+    }
   }
 };
+
+eggStart?.addEventListener("click", playEasterEgg);
+window.addEventListener("orientationchange", () => {
+  if (eggOrientationHint && window.matchMedia("(orientation: landscape)").matches) {
+    eggOrientationHint.style.display = "none";
+  } else if (eggOrientationHint && eggOverlay?.classList.contains("is-playing")) {
+    eggOrientationHint.style.display = "";
+  }
+});
 
 openButton.addEventListener("click", async () => {
   intro.classList.add("is-hidden");
@@ -121,7 +168,7 @@ openButton.addEventListener("click", async () => {
     window.clearTimeout(easterEggTimer);
   }
   easterEggTimer = window.setTimeout(() => {
-    playEasterEgg();
+    showEasterEgg();
   }, 60000);
 
   if (toast) {
@@ -144,8 +191,8 @@ openButton.addEventListener("click", async () => {
 
 if (eggVideo) {
   eggVideo.addEventListener("ended", () => {
-    eggOverlay.classList.remove("is-visible");
-    if (document.fullscreenElement) {
+    eggOverlay.classList.remove("is-visible", "is-playing");
+    if (document.fullscreenElement === eggOverlay) {
       document.exitFullscreen?.();
     }
     window.screen.orientation?.unlock();
