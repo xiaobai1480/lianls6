@@ -98,6 +98,14 @@ const playEasterEgg = async () => {
     }
   }
 
+  if (window.screen.orientation?.lock) {
+    try {
+      await window.screen.orientation.lock("landscape");
+    } catch (error) {
+      console.warn("Landscape orientation lock failed; using the rotated video layout:", error);
+    }
+  }
+
   try {
     await eggVideo.play();
   } catch (error) {
@@ -140,6 +148,7 @@ if (eggVideo) {
     if (document.fullscreenElement) {
       document.exitFullscreen?.();
     }
+    window.screen.orientation?.unlock();
     if (bgm) {
       bgm.muted = false;
       bgm.currentTime = 0;
